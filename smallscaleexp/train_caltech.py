@@ -106,14 +106,20 @@ transform_test = v2.Compose([
 if aug:  
     transform_train.transforms.insert(0, v2.RandAugment())
 
+
+caltech101 = torchvision.datasets.Caltech101(root='./data', download=True, transform=transform_train)
+
+# Split the dataset manually (e.g., 80% training and 20% testing)
+train_size = int(0.8 * len(caltech101))
+test_size = len(caltech101) - train_size
+trainset, testset = torch.utils.data.random_split(caltech101, [train_size, test_size])
+
+# Create DataLoader for both train and test sets
 # Prepare dataset
-trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=bs, shuffle=True, num_workers=0)
 
-testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model factory..
 print('==> Building model..')
@@ -156,9 +162,9 @@ elif args.net=="vit_small":
     net = ViT(
     image_size = size,
     patch_size = args.patch,
-    num_classes = 10,
+    num_classes = 101,
     dim = int(args.dimhead),
-    depth = 6,
+    depth = 12,
     heads = 8,
     mlp_dim = 512,
     dropout = 0.1,
@@ -169,37 +175,32 @@ elif args.net=="vit_small_stu":
     net = ViT(
     image_size = size,
     patch_size = args.patch,
-    num_classes = 10,
+    num_classes = 100,
     dim = int(args.dimhead),
-    depth = 6,
-    heads = 10,
-    dim_head=64,
-    mlp_dim = 512,
-    dropout = 0.1,
-    emb_dropout = 0.1
-)
-    
-elif args.net=="vit_small_cstu":
-    from models.vit_small_cstu import ViT
-    net = ViT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 10,
-    dim = int(args.dimhead),
-    depth = 6,
+    depth = 12,
     heads = 8,
-    dim_head=64,
     mlp_dim = 512,
     dropout = 0.1,
     emb_dropout = 0.1
 )
+
+elif args.net=="vit_timm":
+    import timm
+    net = timm.create_model("vit_base_patch16_384", pretrained=True)
+    net.head = nn.Linear(net.head.in_features, 10)
+
+elif args.net=="vit_timm_test":
+    import timm
+    net = timm.create_model("vit_base_patch16_384", pretrained=True)
+    net.head = nn.Linear(net.head.in_features, 10)
+    print(net)
 
 elif args.net=="cait":
     from models.cait import CaiT
     net = CaiT(
     image_size = size,
     patch_size = args.patch,
-    num_classes = 10,
+    num_classes = 100,
     dim = int(args.dimhead),
     depth = 6,   # depth of transformer for patch to patch attention only
     cls_depth=2, # depth of cross attention of CLS tokens to patch
@@ -214,24 +215,7 @@ elif args.net=="cait_stu":
     net = CaiT(
     image_size = size,
     patch_size = args.patch,
-    num_classes = 10,
-    dim = int(args.dimhead),
-    depth = 6,   # depth of transformer for patch to patch attention only
-    cls_depth=2, # depth of cross attention of CLS tokens to patch
-    heads = 10,
-    dim_head=62,
-    mlp_dim = 512,
-    dropout = 0.1,
-    emb_dropout = 0.1,
-    layer_dropout = 0.05
-)
-    
-elif args.net=="cait_cstu":
-    from models.cait_cstu import CaiT
-    net = CaiT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 10,
+    num_classes = 100,
     dim = int(args.dimhead),
     depth = 6,   # depth of transformer for patch to patch attention only
     cls_depth=2, # depth of cross attention of CLS tokens to patch
@@ -241,29 +225,24 @@ elif args.net=="cait_cstu":
     emb_dropout = 0.1,
     layer_dropout = 0.05
 )
+    
 elif args.net=="swin":
     from models.swin import swin_t
     net = swin_t(window_size=args.patch,
-                num_classes=10,
+                num_classes=100,
                 downscaling_factors=(2,2,2,1))
     
 elif args.net=="swin_stu":
     from models.swin_stu import swin_t
     net = swin_t(window_size=args.patch,
-                num_classes=10,
+                num_classes=100,
                 downscaling_factors=(2,2,2,1))
-    
-elif args.net=="swin_cstu":
-    from models.swin_cstu import swin_t
-    net = swin_t(window_size=args.patch,
-                num_classes=10,
-                downscaling_factors=(2,2,2,1))
-    
+
 elif args.net=="cvt":
     from models.cvt import ConvolutionalVisionTransformer
     net = ConvolutionalVisionTransformer(
         in_chans=3,
-        num_classes=10,
+        num_classes=100,
         act_layer=QuickGELU,
         norm_layer=partial(LayerNorm, eps=1e-5),
         # init=getattr(msvit_spec, 'INIT', 'trunc_norm'),
@@ -293,37 +272,7 @@ elif args.net=="cvt_stu":
     from models.cvt_stu import ConvolutionalVisionTransformer
     net = ConvolutionalVisionTransformer(
         in_chans=3,
-        num_classes=10,
-        act_layer=QuickGELU,
-        norm_layer=partial(LayerNorm, eps=1e-5),
-        # init=getattr(msvit_spec, 'INIT', 'trunc_norm'),
-        spec={'NUM_STAGES':3,
-            'PATCH_SIZE': [7, 3, 3],
-            'PATCH_STRIDE': [4, 2, 2],
-            'PATCH_PADDING': [2, 1, 1],
-            'DIM_EMBED': [64, 198, 402],
-            'NUM_HEADS': [1, 3, 6],
-            'DEPTH': [1, 2, 10],
-            'MLP_RATIO': [4.0, 4.0, 4.0],
-            'ATTN_DROP_RATE': [0.0, 0.0, 0.0],
-            'DROP_RATE': [0.0, 0.0, 0.0],
-            'DROP_PATH_RATE': [0.0, 0.0, 0.1],
-            'QKV_BIAS': [True, True, True],
-            'CLS_TOKEN': [False, False, True],
-            'POS_EMBED': [False, False, False],
-            'QKV_PROJ_METHOD': ['dw_bn', 'dw_bn', 'dw_bn'],
-            'KERNEL_QKV': [3, 3, 3],
-            'PADDING_KV': [1, 1, 1],
-            'STRIDE_KV': [2, 2, 2],
-            'PADDING_Q': [1, 1, 1],
-            'STRIDE_Q': [1, 1, 1],}
-    )
-
-elif args.net=="cvt_cstu":
-    from models.cvt_cstu import ConvolutionalVisionTransformer
-    net = ConvolutionalVisionTransformer(
-        in_chans=3,
-        num_classes=10,
+        num_classes=100,
         act_layer=QuickGELU,
         norm_layer=partial(LayerNorm, eps=1e-5),
         # init=getattr(msvit_spec, 'INIT', 'trunc_norm'),
@@ -452,7 +401,7 @@ def test(epoch):
     os.makedirs("log", exist_ok=True)
     content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
     print(content)
-    with open(f'log/log_{args.net}_patch{args.patch}.txt', 'a') as appender:
+    with open(f'log/cifar100/log_{args.net}_patch{args.patch}.txt', 'a') as appender:
         appender.write(content + "\n")
     return test_loss, acc
 
@@ -479,7 +428,7 @@ for epoch in range(start_epoch, args.n_epochs):
         "epoch_time": time.time()-start})
 
     # Write out csv..
-    with open(f'log/log_{args.net}_patch{args.patch}.csv', 'w') as f:
+    with open(f'log/cifar100/log_{args.net}_patch{args.patch}.csv', 'w') as f:
         writer = csv.writer(f, lineterminator='\n')
         writer.writerow(list_loss) 
         writer.writerow(list_acc) 

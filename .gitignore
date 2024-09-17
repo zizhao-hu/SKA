@@ -3,3 +3,6 @@ output/
 smallscaleexp/checkpoint
 smallscaleexp/data
 smallscaleexp/log
+smallscaleexp/wandb
+smallscaleexp/__pycache__
+smallscaleexp/models/__pycache__

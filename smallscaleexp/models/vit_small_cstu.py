@@ -1,6 +1,8 @@
-# https://github.com/lucidrains/vit-pytorch/blob/main/vit_pytorch/vit.py
+# https://github.com/lucidrains/vit-pytorch/blob/main/vit_pytorch/vit_for_small_dataset.py
 
+from math import sqrt
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 from einops import rearrange, repeat
@@ -34,29 +36,41 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class Attention(nn.Module):
+class LSA(nn.Module):
     def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
         super().__init__()
         inner_dim = dim_head *  heads
-        project_out = not (heads == 1 and dim_head == dim)
-
         self.heads = heads
-        self.scale = dim_head ** -0.5
+        self.temperature = nn.Parameter(torch.log(torch.tensor(dim_head ** -0.5)))
 
         self.attend = nn.Softmax(dim = -1)
-        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
-
+        self.to_qv = nn.Linear(dim, inner_dim * 2, bias = False)
+        # self.k = nn.Parameter(torch.randn(heads,65,dim_head))
+        self.k2 = nn.Parameter(torch.randn(heads,65,dim_head))
+        self.to_k = nn.Conv2d(dim, heads*65, groups = heads, kernel_size = 3, padding = 1)
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim),
             nn.Dropout(dropout)
-        ) if project_out else nn.Identity()
+        )
 
     def forward(self, x):
-        qkv = self.to_qkv(x).chunk(3, dim = -1)
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv)
-
-        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
-
+        b,_,_ = x.shape
+        qv = self.to_qv(x).chunk(2, dim = -1)
+        q,v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qv)
+        q1 = q[:,:,1:,:]
+        q2 = q[:,:,:1,:]
+        q1c = rearrange(q1, 'b h (a c) d -> b (h d) a c', a = 8)
+        k1 = self.to_k(q1c)
+        k1 = rearrange(k1, 'b (k d) h w-> b k (h w) d', k = 8)
+        k2 = self.k2.unsqueeze(0).repeat(b,1,1,1)
+        # k = self.k.unsqueeze(0).repeat(b,1,1,1)
+        dot1 = k1
+        dot2 = torch.matmul(q2, k2.transpose(-1, -2)) * self.temperature.exp()
+        dots = torch.cat([dot1,dot2], dim = 2)
+        # print(dots.shape)   
+        mask = torch.eye(dots.shape[-1], device = dots.device, dtype = torch.bool)
+        mask_value = -torch.finfo(dots.dtype).max
+        dots = dots.masked_fill(mask, mask_value)
         attn = self.attend(dots)
 
         out = torch.matmul(attn, v)
@@ -69,7 +83,7 @@ class Transformer(nn.Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout)),
+                PreNorm(dim, LSA(dim, heads = heads, dim_head = dim_head, dropout = dropout)),
                 PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
             ]))
     def forward(self, x):
@@ -77,6 +91,23 @@ class Transformer(nn.Module):
             x = attn(x) + x
             x = ff(x) + x
         return x
+
+class SPT(nn.Module):
+    def __init__(self, *, dim, patch_size, channels = 3):
+        super().__init__()
+        patch_dim = patch_size * patch_size * 5 * channels
+
+        self.to_patch_tokens = nn.Sequential(
+            Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_size, p2 = patch_size),
+            nn.LayerNorm(patch_dim),
+            nn.Linear(patch_dim, dim)
+        )
+
+    def forward(self, x):
+        shifts = ((1, -1, 0, 0), (-1, 1, 0, 0), (0, 0, 1, -1), (0, 0, -1, 1))
+        shifted_x = list(map(lambda shift: F.pad(x, shift), shifts))
+        x_with_shifts = torch.cat((x, *shifted_x), dim = 1)
+        return self.to_patch_tokens(x_with_shifts)
 
 class ViT(nn.Module):
     def __init__(self, *, image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0.):
@@ -90,10 +121,7 @@ class ViT(nn.Module):
         patch_dim = channels * patch_height * patch_width
         assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
 
-        self.to_patch_embedding = nn.Sequential(
-            Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_height, p2 = patch_width),
-            nn.Linear(patch_dim, dim),
-        )
+        self.to_patch_embedding = SPT(dim = dim, patch_size = patch_size, channels = channels)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
