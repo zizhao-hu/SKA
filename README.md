@@ -1,5 +1,4 @@
-# [MetaFormer Baselines for Vision](https://arxiv.org/abs/2210.13452) (TPAMI 2024)
-
+# [Spatial/Self Transforming Unit]
 <p align="left">
 <a href="https://arxiv.org/abs/2210.13452" alt="arXiv">
     <img src="https://img.shields.io/badge/arXiv-2210.13452-b31b1b.svg?style=flat" /></a>
