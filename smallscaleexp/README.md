@@ -1,35 +1,10 @@
 # Small-scale Experiment CIFAR
-This is your go-to playground for training Vision Transformers (ViT) and its related models on CIFAR-10 and cifar-100.
-
-The whole codebase is implemented in Pytorch, which makes it easier for you to tweak and experiment. Over the months, we've made several notable updates including adding different models like ConvMixer, CaiT, ViT-small, SwinTransformers, and MLP mixer. We've also adapted the default training settings for ViT to fit better with the CIFAR-10 dataset.
-
-Using the repository is straightforward - all you need to do is run the `train_cifar10.py` script with different arguments, depending on the model and training parameters you'd like to use.
-
-### Updates
-* Added [ConvMixer]((https://openreview.net/forum?id=TVHS5Y4dNvM)) implementation. Really simple! (2021/10)
-
-* Added wandb train log to reproduce results. (2022/3)
-
-* Added CaiT and ViT-small. (2022/3)
-
-* Added SwinTransformers. (2022/3)
-
-* Added MLP mixer. (2022/6)
-
-* Changed default training settings for ViT.
-
-* Fixed some bugs and training settings (2024/2)
 
 # Usage example
-`python train_cifar10.py` # vit-patchsize-4
-
-`python train_cifar10.py  --size 48` # vit-patchsize-4-imsize-48
-
-`python train_cifar10.py --patch 2` # vit-patchsize-2
 
 `python train_cifar10.py --net vit_small --n_epochs 400` # vit-small
-
-`python train_cifar10.py --net vit_timm` # train with pretrained vit
+`python train_cifar10.py --net vit_small_stu --n_epochs 400` # stu
+`python train_cifar10.py --net vit_small_cstu --n_epochs 400` # cstu
 
 `python train_cifar10.py --net convmixer --n_epochs 400` # train with convmixer
 
