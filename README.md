@@ -143,9 +143,6 @@ cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
 ```
 Training (fine-tuning) scripts of other models are shown in [scripts](/scripts/).
 
-## Acknowledgment
-Weihao Yu would like to thank TRC program and GCP research credits for the support of partial computational resources. Our implementation is based on the wonderful [pytorch-image-models](https://github.com/rwightman/pytorch-image-models) codebase.
-
 
 ## Bibtex
 ```
