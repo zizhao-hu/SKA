@@ -8,6 +8,8 @@
 
 `python train_cifar10.py --net vit_small_cstu --n_epochs 400` # cstu
 
+Works the same on other models
+
 `python train_cifar10.py --net convmixer --n_epochs 400` # train with convmixer
 
 `python train_cifar10.py --net mlpmixer --n_epochs 500 --lr 1e-3`
