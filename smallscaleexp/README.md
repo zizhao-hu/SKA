@@ -3,7 +3,9 @@
 # Usage example
 
 `python train_cifar10.py --net vit_small --n_epochs 400` # vit-small
+
 `python train_cifar10.py --net vit_small_stu --n_epochs 400` # stu
+
 `python train_cifar10.py --net vit_small_cstu --n_epochs 400` # cstu
 
 `python train_cifar10.py --net convmixer --n_epochs 400` # train with convmixer
