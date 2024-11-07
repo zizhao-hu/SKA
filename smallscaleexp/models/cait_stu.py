@@ -76,7 +76,7 @@ class Attention(nn.Module):
 
         self.to_q = nn.Linear(dim, inner_dim, bias = False)
         if not cls:
-            self.k = nn.Parameter(torch.randn(heads, 64, dim_head)) 
+            self.k = nn.Parameter(torch.randn(heads, 256, dim_head)) 
         else:
             self.to_k = nn.Linear(dim, inner_dim, bias = False)
         self.to_v = nn.Linear(dim, inner_dim, bias = False)

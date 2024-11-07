@@ -26,7 +26,7 @@ from timm.models.layers import trunc_normal_, DropPath
 from timm.models.registry import register_model
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers.helpers import to_2tuple
-
+import einops
 
 def _cfg(url='', **kwargs):
     return {
@@ -294,8 +294,149 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
+    
+class STU(nn.Module):
+ 
+    def __init__(self, dim, head_dim=32, num_heads=None, qkv_bias=False,
+        attn_drop=0., proj_drop=0., proj_bias=False, **kwargs):
+        super().__init__()
 
+        self.head_dim = head_dim
+        self.scale = head_dim ** -0.5
 
+        self.num_heads = num_heads if num_heads else dim // head_dim
+        if self.num_heads == 0:
+            self.num_heads = 1
+        
+        self.attention_dim = self.num_heads * self.head_dim
+
+        # self.qv = nn.Linear(dim, self.attention_dim * 2, bias=qkv_bias)
+        self.v = nn.Linear(dim, self.attention_dim, bias=qkv_bias)
+        self.k = nn.Parameter(torch.randn(self.num_heads, 196, head_dim)) if dim < 512 else nn.Parameter(torch.randn(self.num_heads, 49, head_dim))
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(self.attention_dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        
+    def forward(self, x):
+        B, H, W, C = x.shape
+        N = H * W
+        # qv = self.qv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q = x.reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        v = self.v(x).reshape(B, N, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
+        # q, v = qv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
+        k = self.k.unsqueeze(0).repeat(B,1,1,1)
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+class CSTU(nn.Module):
+ 
+    def __init__(self, dim, head_dim=16, num_heads=None, qkv_bias=False,
+        attn_drop=0., proj_drop=0., proj_bias=False, **kwargs):
+        super().__init__()
+
+        self.head_dim = head_dim
+        self.scale = head_dim ** -0.5
+        hidden_scale = 1
+        self.num_heads = num_heads if num_heads else dim // head_dim * hidden_scale
+        if self.num_heads == 0:
+            self.num_heads = 1
+        
+        self.attention_dim = self.num_heads * self.head_dim
+
+        self.qv = nn.Linear(dim, self.attention_dim * 2, bias=qkv_bias)
+        if dim < 128:
+            # first stage 56 x 56 = 3156, dim = 64, attention_dim = 128
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*3136, groups = self.num_heads, kernel_size = 3, padding = 1)
+        elif dim < 320:
+            # second stage 28 x 28 = 784, dim = 128, attention_dim = 256
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*784, groups = self.num_heads, kernel_size = 3, padding = 1)
+        elif dim < 512:
+            # third stage 14 x 14 = 196, dim = 320, attention_dim = 512
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*196, groups = self.num_heads, kernel_size = 3, padding = 1)
+        else:
+            # fourth stage 7 x 7 = 49, dim = 512, attention_dim = 1024
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*49, groups = self.num_heads, kernel_size = 3, padding = 1)
+       
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(self.attention_dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        
+    def forward(self, x):
+        B, H, W, C = x.shape
+        N = H * W
+        qv = self.qv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, v = qv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
+        
+        attn = self.to_k(einops.rearrange(q, 'b h (a c) d -> b (h d) a c', a = W)) * self.scale
+        attn = einops.rearrange(attn, 'b (k d) h w -> b k (h w) d', k =self.num_heads)
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+        # print(attn.shape)
+        # print(v.shape)
+        x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+    
+class CSTU1(nn.Module):
+ 
+    def __init__(self, dim, head_dim=32, num_heads=None, qkv_bias=False,
+        attn_drop=0., proj_drop=0., proj_bias=False, **kwargs):
+        super().__init__()
+
+        self.head_dim = head_dim
+        self.scale = head_dim ** -0.5
+        hidden_scale = 1
+        self.num_heads = num_heads if num_heads else dim // head_dim * hidden_scale
+        if self.num_heads == 0:
+            self.num_heads = 1
+        
+        self.attention_dim = self.num_heads * self.head_dim
+
+        self.qv = nn.Linear(dim, self.attention_dim * 2, bias=qkv_bias)
+        if dim < 128:
+            # first stage 56 x 56 = 3156, dim = 64, attention_dim = 128
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*3136, groups = self.num_heads, kernel_size = 3, padding = 1)
+        elif dim < 320:
+            # second stage 28 x 28 = 784, dim = 128, attention_dim = 256
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*784, groups = self.num_heads, kernel_size = 3, padding = 1)
+        elif dim < 512:
+            # third stage 14 x 14 = 196, dim = 320, attention_dim = 512
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*196, groups = self.num_heads, kernel_size = 3, padding = 1)
+        else:
+            # fourth stage 7 x 7 = 49, dim = 512, attention_dim = 1024
+            self.to_k = nn.Conv2d(self.attention_dim, self.num_heads*49, groups = self.num_heads, kernel_size = 3, padding = 1)
+       
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(self.attention_dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        
+    def forward(self, x):
+        B, H, W, C = x.shape
+        N = H * W
+        qv = self.qv(x).reshape(B, N, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, v = qv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
+        
+        attn = self.to_k(einops.rearrange(q, 'b h (a c) d -> b (h d) a c', a = W))
+        attn = einops.rearrange(attn, 'b (k d) h w -> b k (h w) d', k =self.num_heads)
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+        # print(attn.shape)
+        # print(v.shape)
+        x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+    
 class RandomMixing(nn.Module):
     def __init__(self, num_tokens=196, **kwargs):
         super().__init__()
@@ -1233,6 +1374,36 @@ def caformer_s18(pretrained=False, **kwargs):
         model.load_state_dict(state_dict)
     return model
 
+@register_model
+def stu_caformer_s18(pretrained=False, **kwargs):
+    model = MetaFormer(
+        depths=[3, 3, 9, 3],
+        dims=[64, 128, 320, 512],
+        token_mixers=[SepConv, SepConv, STU, STU],
+        head_fn=MlpHead,
+        **kwargs)
+    model.default_cfg = default_cfgs['caformer_s18']
+    if pretrained:
+        state_dict = torch.hub.load_state_dict_from_url(
+            url= model.default_cfg['url'], map_location="cpu", check_hash=True)
+        model.load_state_dict(state_dict)
+    return model
+
+@register_model
+def cstu_caformer_s18(pretrained=False, **kwargs):
+    model = MetaFormer(
+        depths=[3, 3, 9, 3],
+        dims=[64, 128, 320, 512],
+        token_mixers=[SepConv, CSTU, Attention, Attention],
+        head_fn=MlpHead,
+        **kwargs)
+    model.default_cfg = default_cfgs['caformer_s18']
+    if pretrained:
+        state_dict = torch.hub.load_state_dict_from_url(
+            url= model.default_cfg['url'], map_location="cpu", check_hash=True)
+        model.load_state_dict(state_dict)
+    return model
+
 
 @register_model
 def caformer_s18_384(pretrained=False, **kwargs):
@@ -1473,6 +1644,20 @@ def caformer_b36(pretrained=False, **kwargs):
         model.load_state_dict(state_dict)
     return model
 
+@register_model
+def cstu_caformer_b36(pretrained=False, **kwargs):
+    model = MetaFormer(
+        depths=[3, 12, 18, 3],
+        dims=[128, 256, 512, 768],
+        token_mixers=[SepConv, CSTU, Attention, Attention],
+        head_fn=MlpHead,
+        **kwargs)
+    model.default_cfg = default_cfgs['caformer_b36']
+    if pretrained:
+        state_dict = torch.hub.load_state_dict_from_url(
+            url= model.default_cfg['url'], map_location="cpu", check_hash=True)
+        model.load_state_dict(state_dict)
+    return model
 
 @register_model
 def caformer_b36_384(pretrained=False, **kwargs):

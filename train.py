@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-r"""
+"""
 This script is mostly copied from https://github.com/rwightman/pytorch-image-models/blob/v0.6.11/train.py
 and make some modifications:
 1) enable the gradient accumulation (`--grad-accum-steps`)
