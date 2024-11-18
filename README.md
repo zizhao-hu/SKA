@@ -122,11 +122,17 @@ cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
 -b $BATCH_SIZE --grad-accum-steps $GRAD_ACCUM_STEPS \
 --drop-path 0.2 --head-dropout 0.0
 ```
-Training (fine-tuning) scripts of other models are shown in [scripts](/scripts/).
 
 
-## Bibtex
-```
+# Acknowledgement
+
+We acknowledge the following sources for their valuable contributions, which inspired or supported parts of this codebase:
+
+- **MetaFormer Framework**: The development of SKA and its variant CSKA was built upon the foundation of the MetaFormer framework, which provided a versatile token-mixing architecture. ([MetaFormer Paper](https://doi.org/10.1109/TPAMI.2023.3329173))
+
+## Citation for MetaFormer Framework
+If you use this code or build upon it, please consider citing the MetaFormer framework as follows:
+```bibtex
 @article{yu2024metaformer,
   author={Yu, Weihao and Si, Chenyang and Zhou, Pan and Luo, Mi and Zhou, Yichen and Feng, Jiashi and Yan, Shuicheng and Wang, Xinchao},
   journal={IEEE Transactions on Pattern Analysis and Machine Intelligence}, 
@@ -135,6 +141,6 @@ Training (fine-tuning) scripts of other models are shown in [scripts](/scripts/)
   volume={46},
   number={2},
   pages={896-912},
-  doi={10.1109/TPAMI.2023.3329173}}
+  doi={10.1109/TPAMI.2023.3329173}
 }
-```
+
