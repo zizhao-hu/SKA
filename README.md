@@ -21,7 +21,7 @@ SKA highlights the potential of static key mechanisms for efficient and scalable
 - Fully trainable in an **end-to-end manner**.
 
 ### 2. CSKA: A Special Case of SKA
-- Incorporates **grouped convolutions** to generate static keys, inspired by convolutional paradigms.
+- Incorporates **grouped convolutions** to generate static keys, inspired by multi-headedness in Transformers.
 - Efficiently balances performance and computational demands in **hierarchical vision networks**.
 
 ### 3. MetaFormer Framework Compatibility
