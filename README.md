@@ -69,6 +69,7 @@ Clone the repository and install the required dependencies:
 git clone https://github.com/your-repo/ska.git
 cd ska
 pip install -r requirements.txt
+```
 
 ## Requirements
 
