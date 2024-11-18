@@ -126,7 +126,7 @@ cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
 
 # Acknowledgement
 
-We acknowledge the following sources for their valuable contributions, which inspired or supported parts of this codebase:
+We acknowledge the following sources for their valuable contributions, which inspired or supported a majority of this codebase:
 
 - **MetaFormer Framework**: The development of SKA and its variant CSKA was built upon the foundation of the MetaFormer framework, which provided a versatile token-mixing architecture. ([MetaFormer Paper](https://doi.org/10.1109/TPAMI.2023.3329173))
 
